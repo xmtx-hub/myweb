@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>极简乱码双向转换（含标点替换版）</title>
+    <style>
+        * { margin: 10px; padding: 0; box-sizing: border-box; }
+        textarea { width: 90%; height: 150px; padding: 10px; font-size: 16px; }
+        button { padding: 8px 20px; font-size: 16px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h3>普通文字 ↔ 乱码转换</h3>
+    <textarea id="normalText" placeholder="输入普通文字，点击「转乱码」"></textarea>
+    <textarea id="garbledText" placeholder="输入生成的乱码，点击「转普通文字」"></textarea>
+    <button onclick="toGarbled()">转 乱 码</button>
+    <button onclick="toNormal()">转普通文字</button>
+
+    <script>
+        const normalInput = document.getElementById('normalText');
+        const garbledInput = document.getElementById('garbledText');
+        
+        // 更丰富的崩坏符号库
+        const randomSymbols = [
+            '・', '∽', '∝', '㈹', '', '', '､', '･', '╳', '〓', '￡', '￢', '￣', 
+            '♂', '♀', '￤', '＄', '％', '＆', '＊', '＃', '！', '？', '；', '：',
+            '「', '」', '『', '』', '（', '）', '｛', '｝', '【', '】', '￠', '￡',
+            '△', '▽', '○', '□', '△', '￪', '￬', '↵', '↔', '♪', '♫', '☉', '★',
+            '☆', '￤', '〒', '＠', '＝', '＋', '－', '／', '＼', '～', '｀', '´'
+        ];
+        
+        // 常用标点与崩坏符号的映射表（转乱码时替换，还原时反向映射）
+        const punctuationMap = {
+            '，': '､',
+            '。': '・',
+            '？': '？', // 保留部分风格，也可替换为「￡」
+            '！': '！', // 保留部分风格，也可替换为「￢」
+            '；': '；',
+            '：': '：',
+            '“': '「',
+            '”': '」',
+            '‘': '｀',
+            '’': '´',
+            '（': '（',
+            '）': '）',
+            '、': '･',
+            '…': '～～'
+        };
+        // 反向映射表（用于还原标点）
+        const reversePunctuationMap = {};
+        for (const [origin, replace] of Object.entries(punctuationMap)) {
+            reversePunctuationMap[replace] = origin;
+        }
+
+        // 判断是否是我们插入的崩坏符号（非标点映射的符号）
+        function isInsertedSymbol(char) {
+            return randomSymbols.includes(char) && !Object.values(reversePunctuationMap).includes(char);
+        }
+
+        // 字符编码偏移转换
+        function charTransform(char, isToGarbled) {
+            const code = char.charCodeAt(0);
+            if (code >= 0x4E00 && code <= 0x9FFF) { // 中文
+                return String.fromCharCode(isToGarbled ? code + 1234 : code - 1234);
+            } else if (code >= 0x0020 && code <= 0x007E) { // 英文/半角标点
+                return String.fromCharCode(isToGarbled ? code + 6543 : code - 6543);
+            } else {
+                return char;
+            }
+        }
+
+        // 替换常用标点为崩坏符号
+        function replacePunctuation(char, isToGarbled) {
+            if (isToGarbled) {
+                // 转乱码：替换原始标点
+                return punctuationMap[char] || char;
+            } else {
+                // 还原：将映射后的符号转回原始标点
+                return reversePunctuationMap[char] || char;
+            }
+        }
+
+        // 生成随机间隔（2-10个字符，更崩坏）
+        function getRandomInterval() {
+            return Math.floor(Math.random() * 9) + 2;
+        }
+
+        // 获取随机符号（1-2个，增加杂乱感）
+        function getRandomSymbol() {
+            let symStr = '';
+            const symCount = Math.floor(Math.random() * 2) + 1;
+            for (let i = 0; i < symCount; i++) {
+                const randomIndex = Math.floor(Math.random() * randomSymbols.length);
+                symStr += randomSymbols[randomIndex];
+            }
+            return symStr;
+        }
+
+        // 普通文字转乱码（含标点替换+随机符号插入）
+        function toGarbled() {
+            const normalStr = normalInput.value;
+            let garbledStr = '';
+            let charCount = 0;
+            let currentInterval = getRandomInterval();
+
+            for (let i = 0; i < normalStr.length; i++) {
+                let currentChar = normalStr[i];
+                // 第一步：替换常用标点
+                currentChar = replacePunctuation(currentChar, true);
+                // 第二步：字符编码偏移转换
+                currentChar = charTransform(currentChar, true);
+                // 第三步：拼接转换后的字符
+                garbledStr += currentChar;
+                charCount++;
+
+                // 达到间隔插入随机符号（排除标点，只按有效文字计数，可根据需求调整）
+                if (!Object.keys(punctuationMap).includes(normalStr[i]) && charCount >= currentInterval && i !== normalStr.length - 1) {
+                    garbledStr += getRandomSymbol();
+                    charCount = 0;
+                    currentInterval = getRandomInterval();
+                }
+            }
+            garbledInput.value = garbledStr;
+        }
+
+        // 乱码转普通文字（过滤插入符号+还原标点+还原文字）
+        function toNormal() {
+            const garbledStr = garbledInput.value;
+            let normalStr = '';
+
+            // 第一步：过滤插入的崩坏符号，同时收集需要还原的字符
+            let filteredStr = '';
+            for (let i = 0; i < garbledStr.length; i++) {
+                const char = garbledStr[i];
+                if (!isInsertedSymbol(char)) {
+                    filteredStr += char;
+                }
+            }
+
+            // 第二步：先还原字符编码，再还原标点
+            for (let i = 0; i < filteredStr.length; i++) {
+                let currentChar = filteredStr[i];
+                // 字符编码反向转换
+                currentChar = charTransform(currentChar, false);
+                // 标点反向还原
+                currentChar = replacePunctuation(currentChar, false);
+                normalStr += currentChar;
+            }
+
+            normalInput.value = normalStr;
+        }
+    </script>
+</body>
+</html>
